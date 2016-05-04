@@ -73,12 +73,19 @@ void loop() {
     colorWipe(strip.Color(148,0,211),300);
   }
  
-  
+  //showreel();
   
 
   delay(2000);
 }
 
+void showreel() {
+  colorWipe(strip.Color(0,255,0),800);
+   colorWipe(strip.Color(255,255,0),800);
+    colorWipe(strip.Color(255,69,0),800);
+     colorWipe(strip.Color(255,0,0),800);
+     colorWipe(strip.Color(148,0,211),800);
+  }
  
 // Fill the dots one after the other with a color
 void colorWipe(uint32_t c, uint8_t wait) {
