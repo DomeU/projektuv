@@ -60,11 +60,6 @@
 
     #define PIN                     8
     #define NUMPIXELS               1
-
-    #define BLUEFRUIT_UART_MODE_PIN         -1   // Not used with FLORA
-    #define BLUEFRUIT_UART_CTS_PIN          -1   // Not used with FLORA
-    #define BLUEFRUIT_UART_RTS_PIN          -1   // Not used with FLORA
-    #define BLUEFRUIT_HWSERIAL_NAME           Serial1
         
 /*=========================================================================*/
 
