@@ -62,7 +62,7 @@
     #define FACTORYRESET_ENABLE     1
 
     #define PIN                     8
-    #define PIN2                    10
+    #define PIN2                    6
     #define NUMPIXELS               1
         
 /*=========================================================================*/
@@ -131,6 +131,10 @@ void setup(void)
     pixel.setPixelColor(i, pixel.Color(0,0,0)); // off
   }
   pixel.show();
+  // turn off other neopixel 
+   strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
+
 
   Serial.begin(115200);
   Serial.println(F("Adafruit Bluefruit Neopixel Color Picker Example"));
@@ -189,6 +193,9 @@ void setup(void)
 /**************************************************************************/
 void loop(void)
 {
+  
+  updateUV(1000);
+
   /* Wait for new data to arrive */
   uint8_t len = readPacket(&ble, BLE_READPACKET_TIMEOUT);
   if (len == 0) return;
@@ -214,8 +221,6 @@ void loop(void)
     }
     pixel.show(); // This sends the updated pixel color to the hardware.
   }
-
-  updateUV(2000);
 
 }
 
