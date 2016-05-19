@@ -171,10 +171,11 @@ void setup(void)
 
   ble.verbose(false);  // debug info is a little annoying after this point!
 
-  /* Wait for connection */
-/*  while (! ble.isConnected()) {
+   /* Wait for connection */
+  while (! ble.isConnected()) {
       delay(500);
-  }*/
+      Serial.print("waiting for BLE connection \n");
+  }
 
   Serial.println(F("***********************"));
 
@@ -183,6 +184,8 @@ void setup(void)
   ble.setMode(BLUEFRUIT_MODE_DATA);
 
   Serial.println(F("***********************"));
+
+ 
 
 }
 
@@ -202,7 +205,12 @@ void loop(void)
 
   /* Got a packet! */
   // printHex(packetbuffer, len);
-
+  /* debuging*/
+  Serial.print(packetbuffer[0]);
+  Serial.print(packetbuffer[1]);
+  Serial.print(packetbuffer[2]);
+  Serial.print(packetbuffer[3]);
+  Serial.print(packetbuffer[4]);
   // Color
   if (packetbuffer[1] == 'C') {
     uint8_t red = packetbuffer[2];
@@ -253,7 +261,11 @@ void updateUV(uint32_t dlay) {
    if (11 < UVindex){ // über 11 lila
     colorWipe(strip.Color(148,0,211),300);
   }
-
+ // Serial.println("bl check");
+    Serial.println("sent uv \n");
+   ble.print(UVindex);
+  
+ 
   delay(dlay);
 }
 
