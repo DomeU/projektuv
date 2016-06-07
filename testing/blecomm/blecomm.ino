@@ -15,13 +15,12 @@
 #include <string.h>
 #include <Arduino.h>
 #include <SPI.h>
-#include<TimeLib.h>
 #if not defined (_VARIANT_ARDUINO_DUE_X_) && not defined (_VARIANT_ARDUINO_ZERO_)
   #include <SoftwareSerial.h>
 #endif
 
 #include "Adafruit_BLE.h"
-#include "Adafruit_BluefruitLE_SPI.h"
+//#include "Adafruit_BluefruitLE_SPI.h"
 #include "Adafruit_BluefruitLE_UART.h"
 
 #include "BluefruitConfig.h"
@@ -29,7 +28,7 @@
 #include <Wire.h>
 #include <Adafruit_SI1145.h>
 
-#include <Adafruit_NeoPixel.h>
+#//include <Adafruit_NeoPixel.h>
 
 /*=========================================================================
     APPLICATION SETTINGS
@@ -64,7 +63,7 @@
 
     #define PIN                     8
     #define PIN2                    6
-    #define NUMPIXELS               1
+ //   #define NUMPIXELS               1
         
 /*=========================================================================*/
 
@@ -96,6 +95,15 @@ void error(const __FlashStringHelper*err) {
   Serial.println(err);
   while (1);
 }
+
+// function prototypes over in packetparser.cpp
+uint8_t readPacket(Adafruit_BLE *ble, uint16_t timeout);
+uint8_t readPacketOverTime(Adafruit_BLE *ble,uint16_t time);
+float parsefloat(uint8_t *buffer);
+void printHex(const uint8_t * data, const uint32_t numBytes);
+
+// the packet buffer
+extern uint8_t packetbuffer[];
 
 /**************************************************************************/
 /*!
@@ -164,10 +172,6 @@ void setup(void)
 
   Serial.println(F("***********************"));
 
- // Zeitabgleich 
- //while(!syncTime()){
-  //delay(2000);
- //}
 
 }
 
@@ -183,12 +187,16 @@ int *numPtr = &n;
 
 float sum = 0.0;
 float* sumPointer = &sum;
+int interval = 0;
+int* intervalPointer = &interval;
+
+int avgCount = 0;
+boolean observe;
+
 void loop(void)
 {
-  
+  listenBLE(intervalPointer);
   updateUV(numPtr,sumPointer);
-  listenBLE(2000);
-
 }
 
 
@@ -196,100 +204,89 @@ void updateUV(int *numPtr , float *sumPtr) {
   //Serial.println("===================");
   //Serial.print("Vis: "); Serial.println(uv.readVisible());
   //Serial.print("IR: "); Serial.println(uv.readIR());
-  
+  // the index is multiplied by 100 so to get the
+  // integer index, divide by 100!
+
+    float UVindex = uv.readUV()/100;
   // Uncomment if you have an IR LED attached to LED pin!
   //Serial.print("Prox: "); Serial.println(uv.readProx());
   // check how many samples we have
-  if (*numPtr > 29) {
+  if (*numPtr > avgCount) {
     float avgUV = (*sumPtr / *numPtr);
-     String code = "Uu";
-    sendRx(code,avgUV);// 30 samples -> 1 min data -> send
+     char code = 'A';
+    sendValues(code,avgUV);// 30 samples -> 1 min data -> send
     *numPtr = 0; 
     *sumPtr = 0.0;
   } else {
     *numPtr += 1;
-    *sumPtr += (uv.readUV()/100.0);
+    *sumPtr += (UVindex);
+    if (observe){
+      char code = 'O';
+      sendValues(code,UVindex);
+    }
   }
-  
-  float UVindex = uv.readUV();
-  // the index is multiplied by 100 so to get the
-  // integer index, divide by 100!
-  UVindex /= 100.0;  
   Serial.print("UV: ");  Serial.println(UVindex);
   Serial.print("sum "); Serial.println(*sumPtr);
   Serial.print("n :"); Serial.println(*numPtr);
 }
 
 // duration in ms
-void listenBLE(uint32_t duration){
-  for (int i=0;i<(duration/200);i++){
-    if (ble.available()) readBLE();
-    delay(200);
+void listenBLE(int *duration){
+ if (*duration == 0){
+  while(!readBLE()){
+    delay(1);
   }
+ }
+ if (*duration > 0){
+  uint8_t len = readPacketOverTime(&ble,*duration);
+  if (len > 0)if(processData())Serial.println("updated SETTINGS");
+ }
+ 
 }
 // possbile incoming commands
-void readBLE(){
-  String data = "";
-  while(ble.available()){
-    char c = ble.read();
-    data += c;
-  }
+boolean readBLE(){
+  uint8_t len = readPacket(&ble,BLE_READPACKET_TIMEOUT);
+  if (len == 0) return false;
+  Serial.println("datapacket lenght ");Serial.print(len);
+ return processData();
 }
+
+boolean processData(){
+   // recieved UVI PARAMETERS
+  // Example P10000010
+  if (packetbuffer[1]='P'){
+    char INTERVAL_MESS[4];
+    INTERVAL_MESS[0]=packetbuffer[2];
+    INTERVAL_MESS[1]=packetbuffer[3];
+    INTERVAL_MESS[2]=packetbuffer[4];
+    INTERVAL_MESS[3]=packetbuffer[5];
+    char * pEnd;
+    interval = strtol(INTERVAL_MESS,&pEnd,0);
+    Serial.println("interval set to ");Serial.print(interval);
+    char INTERVAL_AVRG[4];
+    INTERVAL_AVRG[0]=packetbuffer[6];
+    INTERVAL_AVRG[1]=packetbuffer[7];
+    INTERVAL_AVRG[2]=packetbuffer[8];
+    INTERVAL_AVRG[3]=packetbuffer[9];
+    avgCount = strtol(INTERVAL_AVRG,&pEnd,0);
+      Serial.println("avg set to ");Serial.print(avgCount);
+      return true;
+  }
+  if (packetbuffer[1] == 'O'){
+    if (packetbuffer[2] == '1') observe = true; else observe = false;
+     return true;
+  }
+  return false;
+  }
 
 // send data
-boolean sendRx(String code, float value){
-  ble.print(code);
-  ble.print(value);
-  Serial.print("sent:"); Serial.println(value);
+boolean sendValues(char code, int value){
+  char * bufval = new char[32];
+sprintf(bufval,"%f",value);
+  ble.print(code+bufval);
+  Serial.print("sent:"); Serial.println(code+bufval);
 }
-
-//Zeitabgleich
-
-boolean syncTime(){
-  //debug
-  Serial.print("hour:");Serial.println(hour());
-  Serial.print("minute:");Serial.println(minute());
-  Serial.print("second:");Serial.println(second());
-  Serial.print("day:");Serial.println(day());
-  Serial.print("month:");Serial.println(month());
-  Serial.print("year:");Serial.println(year());
-  Serial.print("now:");Serial.println(now());
-  // initialize sequence
-  ble.print("Tt");
-  // listen 
-  delay(1000);
- String response = "";
-  while(ble.available()){
-   char c =  ble.read();
-   response += c;
-  }
-  if (response.length() > 1) { // succes, no save validation right now
-    Serial.println(response);
-    // set system time 
-    time_t t = atol(response.c_str());
-    Serial.println(hour(t));
-    setTime(t);
-    // check
-    delay(1000);
-    Serial.print("hour:");Serial.println(hour());
-  Serial.print("minute:");Serial.println(minute());
-  Serial.print("second:");Serial.println(second());
-  Serial.print("day:");Serial.println(day());
-  Serial.print("month:");Serial.println(month());
-  Serial.print("year:");Serial.println(year());
-  Serial.print("now:");Serial.println(now());
-  Serial.println(timeStatus());
-  // check if time is correct
-  String code = "Tc";
-  //String now = (String)now();
-  //sprintf(),"%d",now);
-
-    return true;
-  }else return false;
   
-}
-
-
 
 
 
