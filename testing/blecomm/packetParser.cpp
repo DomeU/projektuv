@@ -101,7 +101,7 @@ uint8_t readPacket(Adafruit_BLE *ble, uint16_t timeout)
     delay(1);
   }
 
-  packetbuffer[replyidx] = 0;  // null term
+ 
 
   if (!replyidx)  // no data or timeout 
     return 0;
@@ -109,21 +109,7 @@ uint8_t readPacket(Adafruit_BLE *ble, uint16_t timeout)
     return 0;
   
   // check checksum!
-  uint8_t xsum = 0;
-  uint8_t checksum = packetbuffer[replyidx-1];
-  
-  for (uint8_t i=0; i<replyidx-1; i++) {
-    xsum += packetbuffer[i];
-  }
-  xsum = ~xsum;
 
-  // Throw an error message if the checksum's don't match
-  if (xsum != checksum)
-  {
-    Serial.print("Checksum mismatch in packet : ");
-    printHex(packetbuffer, replyidx+1);
-    return 0;
-  }
   
   // checksum passed!
   return replyidx;
@@ -170,21 +156,6 @@ uint8_t readPacketOverTime(Adafruit_BLE *ble, uint16_t time)
     return 0;
   
   // check checksum!
-  uint8_t xsum = 0;
-  uint8_t checksum = packetbuffer[replyidx-1];
-  
-  for (uint8_t i=0; i<replyidx-1; i++) {
-    xsum += packetbuffer[i];
-  }
-  xsum = ~xsum;
-
-  // Throw an error message if the checksum's don't match
-  if (xsum != checksum)
-  {
-    Serial.print("Checksum mismatch in packet : ");
-    printHex(packetbuffer, replyidx+1);
-    return 0;
-  }
   
   // checksum passed!
   return replyidx;

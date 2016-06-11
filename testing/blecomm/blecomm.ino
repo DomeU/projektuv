@@ -28,7 +28,7 @@
 #include <Wire.h>
 #include <Adafruit_SI1145.h>
 
-#//include <Adafruit_NeoPixel.h>
+//include <Adafruit_NeoPixel.h>
 
 /*=========================================================================
     APPLICATION SETTINGS
@@ -62,12 +62,11 @@
     #define FACTORYRESET_ENABLE     1
 
     #define PIN                     8
-    #define PIN2                    6
+    //#define PIN2                    6
  //   #define NUMPIXELS               1
         
 /*=========================================================================*/
 
-Adafruit_SI1145 uv = Adafruit_SI1145();
 
 
 // Create the bluefruit object, either software serial...uncomment these lines
@@ -105,6 +104,9 @@ void printHex(const uint8_t * data, const uint32_t numBytes);
 // the packet buffer
 extern uint8_t packetbuffer[];
 
+// UV SENSOR
+
+Adafruit_SI1145 uv = Adafruit_SI1145();
 /**************************************************************************/
 /*!
     @brief  Sets up the HW an the BLE module (this function is called
@@ -118,15 +120,10 @@ void setup(void)
   delay(500);
 
   // initialize UV sensor
-  if (! uv.begin()) {
+  while(!uv.begin()){
     Serial.println("Didn't find Si1145");
-    while (1);
+   delay(1000);
   }
-
-  Serial.println("OK!");
-  Serial.println(F("Adafruit Bluefruit Neopixel Color Picker Example"));
-  Serial.println(F("------------------------------------------------"));
-
   /* Initialise the module */
   Serial.print(F("Initialising the Bluefruit LE module: "));
 
@@ -160,7 +157,7 @@ void setup(void)
 
    /* Wait for connection */
   while (! ble.isConnected()) {
-      delay(500);
+      delay(50);
       Serial.print("waiting for BLE connection \n");
   }
 
@@ -207,11 +204,12 @@ void updateUV(int *numPtr , float *sumPtr) {
   // the index is multiplied by 100 so to get the
   // integer index, divide by 100!
 
-    float UVindex = uv.readUV()/100;
+    float UVindex = uv.readUV();
+    UVindex /= 100;
   // Uncomment if you have an IR LED attached to LED pin!
   //Serial.print("Prox: "); Serial.println(uv.readProx());
   // check how many samples we have
-  if (*numPtr > avgCount) {
+  if (*numPtr == avgCount) {
     float avgUV = (*sumPtr / *numPtr);
      char code = 'A';
     sendValues(code,avgUV);// 30 samples -> 1 min data -> send
@@ -247,7 +245,7 @@ void listenBLE(int *duration){
 boolean readBLE(){
   uint8_t len = readPacket(&ble,BLE_READPACKET_TIMEOUT);
   if (len == 0) return false;
-  Serial.println("datapacket lenght ");Serial.print(len);
+  Serial.println("datapacket lenght ");Serial.println(len);
  return processData();
 }
 
@@ -255,21 +253,39 @@ boolean processData(){
    // recieved UVI PARAMETERS
   // Example P10000010
   if (packetbuffer[1]='P'){
-    char INTERVAL_MESS[4];
-    INTERVAL_MESS[0]=packetbuffer[2];
-    INTERVAL_MESS[1]=packetbuffer[3];
-    INTERVAL_MESS[2]=packetbuffer[4];
-    INTERVAL_MESS[3]=packetbuffer[5];
-    char * pEnd;
-    interval = strtol(INTERVAL_MESS,&pEnd,0);
-    Serial.println("interval set to ");Serial.print(interval);
-    char INTERVAL_AVRG[4];
-    INTERVAL_AVRG[0]=packetbuffer[6];
-    INTERVAL_AVRG[1]=packetbuffer[7];
-    INTERVAL_AVRG[2]=packetbuffer[8];
-    INTERVAL_AVRG[3]=packetbuffer[9];
-    avgCount = strtol(INTERVAL_AVRG,&pEnd,0);
-      Serial.println("avg set to ");Serial.print(avgCount);
+    
+    Serial.println(packetbuffer[0]);
+    Serial.println(packetbuffer[1]);
+    Serial.println(packetbuffer[2]);
+    Serial.println(packetbuffer[3]);
+    Serial.println(packetbuffer[4]);
+    Serial.println(packetbuffer[5]);
+    Serial.println(packetbuffer[6]);
+    Serial.println(packetbuffer[7]);
+    Serial.println(packetbuffer[8]);
+    Serial.println(packetbuffer[9]);
+    Serial.println((char)packetbuffer[6]);
+    Serial.println((char)packetbuffer[7]);
+    Serial.println((char)packetbuffer[8]);
+    Serial.println((char)packetbuffer[9]);
+    char INTERVAL_MESS[4],VALUE[4];
+  
+    
+    INTERVAL_MESS[0]= (char)packetbuffer[2];
+    INTERVAL_MESS[1]= (char)packetbuffer[3];
+    INTERVAL_MESS[2]= (char)packetbuffer[4];
+    INTERVAL_MESS[3]= (char)packetbuffer[5];
+    Serial.println(INTERVAL_MESS);
+    interval = getInteger(INTERVAL_MESS);
+    Serial.println("interval set to ");Serial.println(interval);
+    memset (INTERVAL_MESS,0,4);
+    INTERVAL_MESS[0]= (char)packetbuffer[6];
+    INTERVAL_MESS[1]= (char)packetbuffer[7];
+    INTERVAL_MESS[2]= (char)packetbuffer[8];
+    INTERVAL_MESS[3]= (char)packetbuffer[9]; 
+    Serial.println(INTERVAL_MESS);
+    avgCount = getInteger(INTERVAL_MESS);
+      Serial.println("avg set to ");Serial.println(avgCount);
       return true;
   }
   if (packetbuffer[1] == 'O'){
@@ -280,11 +296,52 @@ boolean processData(){
   }
 
 // send data
-boolean sendValues(char code, int value){
-  char * bufval = new char[32];
-sprintf(bufval,"%f",value);
-  ble.print(code+bufval);
-  Serial.print("sent:"); Serial.println(code+bufval);
+boolean sendValues(char code, float value){
+  /*
+  const char* finalCode = (const char*)code;
+  char buf[5];
+  Serial.println(value);
+dtostrf(value, 4, 3, buf);
+Serial.print("egal");
+Serial.println(buf);
+ char* data = appendCharArrayToChar(buf,finalCode);
+ Serial.println(data);*/
+ // WORKAROUND
+  ble.print(code);
+  ble.print(value);
+  Serial.print("sent:"); 
+Serial.print(code);
+  Serial.println(value);
+}
+
+// no check for index out of bound
+int getInteger(char input[]){
+  char output[4];
+      if (input[0] != '0'){
+        output[0] = input[0];
+        output[1] = input[1];
+        output[2] = input[2];
+        output[3] = input[3];
+      } else if (input[1] != '0'){
+        output[0] = input[1];
+        output[1] = input[2];
+        output[2] = input[3];
+      } else if (input[2] != '0'){
+        output[0] = input[2];
+        output[1] = input[3];
+      } else output[0] = input[3];
+      Serial.println(output);
+      return atoi(output);
+  }
+
+char* appendCharArrayToChar(char* array,  const char* a){
+    size_t len = strlen(array);
+
+    char ret[len+2];
+
+strcpy(ret,a);
+strcat( ret,array);
+ return ret;
 }
   
 
