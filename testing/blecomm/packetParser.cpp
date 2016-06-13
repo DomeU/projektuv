@@ -17,8 +17,8 @@
 #define PACKET_BUTTON_LEN               (5)
 #define PACKET_COLOR_LEN                (6)
 #define PACKET_LOCATION_LEN             (15)
-#define PACKET_UVIPARAM_LEN             (8)
-#define PACKET_UVIOPTIONS_LEN            (2)
+#define PACKET_UVIPARAM_LEN             (10)
+#define PACKET_UVIOBSERVE_LEN           (4)
 
 //    READ_BUFSIZE            Size of the read buffer for incoming packets
 #define READ_BUFSIZE                    (20)
@@ -81,11 +81,12 @@ uint8_t readPacket(Adafruit_BLE *ble, uint16_t timeout)
 
   memset(packetbuffer, 0, READ_BUFSIZE);
 
+
   while (timeout--) {
     if (replyidx >= 20) break;
     if ((packetbuffer[1] == 'P') && (replyidx == PACKET_UVIPARAM_LEN))
       break;
-    if ((packetbuffer[1] == 'O') && (replyidx == PACKET_UVIOPTIONS_LEN))
+    if ((packetbuffer[1] == 'O') && (replyidx == PACKET_UVIOBSERVE_LEN))
       break;
     while (ble->available()) {
       char c =  ble->read();
@@ -100,9 +101,6 @@ uint8_t readPacket(Adafruit_BLE *ble, uint16_t timeout)
     if (timeout == 0) break;
     delay(1);
   }
-
- 
-
   if (!replyidx)  // no data or timeout 
     return 0;
   if (packetbuffer[0] != '!')  // doesn't start with '!' packet beginning
@@ -127,7 +125,7 @@ uint8_t readPacketOverTime(Adafruit_BLE *ble, uint16_t time)
     if (replyidx >= 20) break;
     if ((packetbuffer[1] == 'P') && (replyidx == PACKET_UVIPARAM_LEN))
       break;
-    if ((packetbuffer[1] == 'O') && (replyidx == PACKET_UVIOPTIONS_LEN))
+    if ((packetbuffer[1] == 'O') && (replyidx == PACKET_UVIOBSERVE_LEN))
       break;
     while (ble->available()) {
       char c =  ble->read();
@@ -147,7 +145,6 @@ uint8_t readPacketOverTime(Adafruit_BLE *ble, uint16_t time)
       delay(1);
     }
   }
-
   packetbuffer[replyidx] = 0;  // null term
 
   if (!replyidx)  // no data or timeout 
