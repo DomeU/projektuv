@@ -22,16 +22,16 @@
 // The following macros declare the HW serial port you are using. Uncomment
 // this line if you are connecting the BLE to Leonardo/Micro or Flora
 // ----------------------------------------------------------------------------------------------
-#ifdef Serial1    // this makes it not complain on compilation if there's no Serial1
+//#ifdef Serial1    // this makes it not complain on compilation if there's no Serial1
   #define BLUEFRUIT_HWSERIAL_NAME      Serial1
-#endif
+//#endif
 
 
 // SHARED UART SETTINGS
 // ----------------------------------------------------------------------------------------------
 // The following sets the optional Mode pin, its recommended but not required
 // ----------------------------------------------------------------------------------------------
-#define BLUEFRUIT_UART_MODE_PIN        12    // Set to -1 if unused
+#define BLUEFRUIT_UART_MODE_PIN        -1    // Set to -1 if unused
 
 
 // SHARED SPI SETTINGS

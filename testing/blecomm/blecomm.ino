@@ -23,48 +23,57 @@
 
  Adafruit_BluefruitLE_UART ble(BLUEFRUIT_HWSERIAL_NAME, BLUEFRUIT_UART_MODE_PIN);
 
-// function prototypes over in packetparser.cpp
-uint8_t readPacket(Adafruit_BLE *ble, uint16_t timeout);
-uint8_t readPacketOverTime(Adafruit_BLE *ble,uint16_t time);
-float parsefloat(uint8_t *buffer);
-void printHex(const uint8_t * data, const uint32_t numBytes);
+// defines and variables for parsing incoming data
+#define PACKET_UVIPARAM_LEN             (10)
+#define PACKET_UVIOPTIONS_LEN            (4)
 
-// the ble packet buffer
-extern uint8_t packetbuffer[];
+//    READ_BUFSIZE            Size of the read buffer for incoming packets
+#define READ_BUFSIZE                    (20)
+
+/* Buffer to hold incoming characters */
+uint8_t packetbuffer[READ_BUFSIZE+1];
+
 
 // UV SENSOR
 Adafruit_SI1145 uv = Adafruit_SI1145();
 // VARIABLES AND POINTER
-int n = 0;
-int *numPtr = &n;
+int num = 0;
+int *numPointer = &num; // points at variable for storing how much samples were taken
 double sum = 0.0;
-double* sumPointer = &sum;
+double* sumPointer = &sum; // points at the sum of all samples added up
 // Parameter
 int interval = 0;
-int* intervalPointer = &interval;
+int* intervalPointer = &interval; // points at the interval between meassurements
 
 int avgCount = 0;
 // observe flags
-boolean observeUV;
-boolean observeT;
-boolean observeD;
+boolean observeUV = false; // observe UV Index
+boolean observeT = true; // observe Time-left
+boolean observeD = true; // observe current MED
+
 // UV specific 
-double ed = 0.0;
-double *edPointer = &ed;
+double ed = 0.0; // current erythema dosis
+//double *edPointer = &ed; // pointer to ED
 
-double lastAvg = 0.0;
-double lastUVI = 0.0;
+double lastAvg = -1.0;
+double lastUVI = -1.0;
 
-int skintype = 0;
+int skintype = 0; // store selected skintype 
 
+// Called after boot up, initializes connected UVI Sensor and BLE Module
 void setup(void)
 {
-  Serial.begin(115200);
-  //while (!Serial);  // required for Flora & Micro
+  Serial.begin(115200); // starts serial communication 
+  // remove if working without serial monitor
+  while (!Serial) {
+   delay(500);
+  };  // required for Flora & Micro
+  
   delay(500);
 
   // initialize UV sensor
   while(!uv.begin()){
+    //TODO: What can we do if sensor is not found ? (retry, set LED to specific color etc..)
     Serial.println("Didn't find Si1145");
    delay(1000);
   }
@@ -72,12 +81,13 @@ void setup(void)
   initBLE();
 
 }
-// LOOP
 
+// LOOP, beeing constantly executed while running
+// TODO: maybe add some checks if everything is still connected and if not some representation of the state
 void loop(void)
 {
   listenBLE(intervalPointer);
-  updateUV(numPtr,sumPointer);
+  updateUV(numPointer,sumPointer);
 }
 
 // BLE COMMUNICATION
@@ -87,6 +97,7 @@ void initBLE(){
   Serial.print(F("Initialising the Bluefruit LE module: "));
   if ( !ble.begin(VERBOSE_MODE) )
   {
+    //TODO: What can we do if module is not found ? (retry, set LED to specific color etc..)
    Serial.println(F("Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
   }
   Serial.println( F("OK!") );
@@ -94,22 +105,24 @@ void initBLE(){
   {
     /* Perform a factory reset to make sure everything is in a known state */
     Serial.println(F("Performing a factory reset: "));
-    if ( ! ble.factoryReset() ){
+    if (!ble.factoryReset() ){
       Serial.println(F("Couldn't factory reset"));
     }
   }
-   /* Wait for connection */
-  while (! ble.isConnected()) {
-      delay(50);
-      Serial.print("waiting for BLE connection \n");
-  }
+ 
   /* Disable command echo from Bluefruit */
   ble.echo(false);
   ble.verbose(false);  // debug info is a little annoying after this point!
-  // Set Bluefruit to DATA mode
+  
+// ab hier READY FOR CONNECTION (evlt LED color changen) 
+/* Wait for connection */
+  while (!ble.isConnected()) {
+      
+      Serial.println("waiting for BLE connection ..");
+      delay(100);
+  }// Set Bluefruit to DATA mode
   Serial.println( F("Switching to DATA mode!") );
-  ble.setMode(BLUEFRUIT_MODE_DATA);
-// ab hier READY FOR CONNECTION (evlt LED color changen)
+    Serial.println(ble.setMode(BLUEFRUIT_MODE_DATA));
 }
 
 /*
@@ -117,28 +130,48 @@ void initBLE(){
  */
 void listenBLE(int *duration){
   // check if still connected
-  if (!ble.isConnected()){
-    Serial.println(F("Bluetooth connection lost !"));
-    // eine Minute zum reconnecten ?? 
-  }else {
-   if (*duration == 0){
-    // first time connecting since program running
-  while(!readBLE()){
-    delay(1);
+  Serial.println("hier bin ich ");
+  // TODO extra command that swiches in cmd mode, checks and swiches back 
+     delay(100);
+     
+   if (*duration > 0){
+    Serial.println("hier bin ich asd");
+    uint16_t listeningTime = *duration;
+    while (listeningTime > 0){
+      uint8_t len = readPacket(0);
+      if (len > 0){
+       if(processData()){
+         Serial.println("updated SETTINGS"); // success response
+       }
+      }
+      listeningTime--;
+      delay(1);
+      Serial.println(listeningTime);
+    }
+       /*uint8_t len = readPacketOverTime(listeningTime);
+      if (len > 0){
+       if(processData()){
+         Serial.println("updated SETTINGS"); // success response
+       }
+      }*/
+      
   }
- }
- if (*duration > 0){
-  uint8_t len = readPacketOverTime(&ble,*duration);
-  if (len > 0)if(processData())Serial.println("updated SETTINGS"); // success response
+  
+  if (*duration == 0){
+    Serial.println("hier bin ich aseee");
+    // first time connecting since program running ,will be waiting for first recieved data 
+    while(!readBLE()){
+    delay(1);
+    Serial.println("stuck here");
+   }
   } 
- }
 }
 
 /*
  * checks next data packet and calls processData() if lenght > 0
  */
 boolean readBLE(){
-  uint8_t len = readPacket(&ble,BLE_READPACKET_TIMEOUT);
+  uint8_t len = readPacket(BLE_READPACKET_TIMEOUT);
   if (len == 0) return false;
   Serial.println("datapacket lenght ");Serial.println(len);
  return processData();
@@ -171,8 +204,10 @@ boolean processData(){
     BUF[3]= (char)packetbuffer[9]; 
     avgCount = getInteger(BUF);
     Serial.println("avg set to ");Serial.println(avgCount);
+    // clear array
+    memset (BUF,0,4);
     // reset pointers
-       n = 0; 
+       num = 0; 
        sum = 0.0;
        
        success = true;
@@ -305,17 +340,18 @@ void updateUV(int *numPtr , double *sumPtr) {
   // store UVI
   lastUVI = UVindex;
   // calculate ED
-  calcED(UVindex);
-  double tLeft = getTimeLeft();
-  if (tLeft != 0 && observeT){
+  //calcED(UVindex);
+  //double tLeft = getTimeLeft();
+  //if (tLeft != 0 && observeT){
     // sendValues
-  }
+  //}
   
   //debug
   Serial.print("UV: ");  Serial.println(UVindex);
   Serial.print("sum "); Serial.println(*sumPtr);
   Serial.print("n :"); Serial.println(*numPtr);
 }
+
 
 /*
  * Calculates the actual erythem dosis
@@ -325,13 +361,14 @@ void calcED(double uvindex){
       return;
   }
   // duration = intervall in sec
-  double sec = *intervalPointer / 1000;
-  *edPointer += (uvindex * 0.025 * sec); // = 0,025 W/m^2 * seconds -> Joule
+  double sec = interval / 1000;
+  ed += (uvindex * 0.025 * sec); // = 0,025 W/m^2 * seconds -> Joule
   // store in EEPROM in case of power off
   int eAdress = 0 ;
-  EEPROM.put(eAdress,*edPointer);
+  EEPROM.put(eAdress,ed);
   if (observeD){
     // sendValues
+     Serial.print("observeD: ");  Serial.println(observeD);
   }
 }
 /*
@@ -341,23 +378,26 @@ double getTimeLeft(){
   if (skintype == 0){ // no skintype set, no ed
       return 0;
   }
+  // maximum dosis according to skintype
   int med = getMED(skintype);
   double secondsLeft = 0;
+   // check for valid med
   if (med != 0) {
-    // difference between current dosis and maximum erythem dosis
-    double dif = med - *edPointer;
+    // calculate the difference between current erythem dosis and maximum to see how many seconds are left predicting with the newest average UV Index
+    double dif = med - ed;
     // dosis reached already
     if ( dif <= 0 ){
       // WARNEN balb
     }
     // 2/3 des med erreicht - warnen
-    // != 0
-    if (lastAvg != 0.0){
-      //get W/m^2
-      double k = lastAvg * 0.025 ;// seconds * 1
+    // use newest average value if exists (default would be -1.0)
+    if (lastAvg != -1.0){
+      //get W/m^2 per second from average UVI
+      double k = lastAvg * 0.025 * 1; // erythem dosis for 1 second
       secondsLeft = dif / k ;
-    } else if (lastUVI != 0.0){
-      double k = lastUVI * 0.025; // seconds * 1
+    } else if (lastUVI != -1.0){
+      //get W/m^2 per second from last meassured UVI
+      double k = lastUVI * 0.025 * 1; // erythem dosis for 1 second 
       double secondsLeft = dif / k ;
     } else {
       // all values are 0, not able to calculate time 
@@ -374,9 +414,107 @@ int getMED(int skin){
   return 0;
 }
 
+/**************************************************************************/
+/*!
+    @brief  Waits for incoming data and parses it
+*/
+/**************************************************************************/
+uint8_t readPacket(uint16_t timeout) 
+{
+  uint16_t origtimeout = timeout, replyidx = 0;
+  memset(packetbuffer, 0, READ_BUFSIZE);
+
+  while (timeout--) {
+    if (replyidx >= 20) break;
+    if ((packetbuffer[1] == 'P') && (replyidx == PACKET_UVIPARAM_LEN)){
+      ble.flush();
+      break;
+    }
+      
+    if ((packetbuffer[1] == 'O') && (replyidx == PACKET_UVIOPTIONS_LEN)){
+      ble.flush();
+      break;
+    }
+    
+    while (ble.available()) {
+      char c =  ble.read();
+      Serial.println(c);
+      if (c == '!') {
+        replyidx = 0;
+      }
+      packetbuffer[replyidx] = c;
+      replyidx++;
+      timeout = origtimeout;
+    }
+    
+    if (timeout == 0) break;
+    delay(1);
+  }
+
+ 
+
+  if (!replyidx)  // no data or timeout 
+    return 0;
+  if (packetbuffer[0] != '!')  // doesn't start with '!' packet beginning
+    return 0;
+  
+  // check checksum!
+
+  
+  // checksum passed!
+  return replyidx;
+}
+
+// will listen for the given time in any case, and return packets length afterwards if a packet was recieved
+// might not work with multiple packets
+uint8_t readPacketOverTime(uint16_t duration) 
+{
+  uint16_t  replyidx = 0;
+  Serial.println(duration);
+  memset(packetbuffer, 0, READ_BUFSIZE);
+
+  while (duration > 0) {
+    if (replyidx >= 20) break;
+    if ((packetbuffer[1] == 'P') && (replyidx == PACKET_UVIPARAM_LEN))break;
+    if ((packetbuffer[1] == 'O') && (replyidx == PACKET_UVIOPTIONS_LEN))break;
+   Serial.println("vor q");
+     while (ble.available()) {
+      Serial.println("vor q");
+      char c =  ble.read();
+      Serial.println(c);
+      if (c == '!') {
+        replyidx = 0;
+      }
+      packetbuffer[replyidx] = c;
+      replyidx++;
+    }
+     delay(1);
+    duration--;
+    if (duration == 0) break;
+   Serial.println(duration);
+  }
+  // wait remaining time
+    while(duration > 0){
+      delay(1);
+      duration--;
+    }
+  
+
+  packetbuffer[replyidx] = 0;  // null term
+
+  if (!replyidx)  // no data or timeout 
+    return 0;
+  if (packetbuffer[0] != '!')  // doesn't start with '!' packet beginning
+    return 0;
+  
+  // check checksum!
+  
+  // checksum passed!
+  return replyidx;
+}
 
 
-int getDecimalCount(double num){
+/*int getDecimalCount(double num){
   int count = 0;
   num = abs(num);
 int remainder = int(0.5 + 10000000 * (num - int(num)));
@@ -395,7 +533,7 @@ char* appendCharArrayToChar(char* array,  const char* a){
     strcpy(ret,a);
     strcat( ret,array);
     return ret;
-}
+} */
   
 
 
